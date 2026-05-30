@@ -1,0 +1,23 @@
+# Secrets — never commit
+.env
+kleinanzeigen_session.json
+
+# Database
+*.db
+*.sqlite3
+
+# Debug artefacts
+debug_*.png
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store

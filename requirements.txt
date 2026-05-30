@@ -1,0 +1,8 @@
+httpx
+beautifulsoup4
+playwright
+python-dotenv
+python-telegram-bot[job-queue]==20.7
+groq
+aiohttp
+playwright-stealth
