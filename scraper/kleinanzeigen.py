@@ -8,8 +8,8 @@ import random
 import re
 from datetime import datetime, timedelta, timezone
 
-import httpx
 from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
 import config
 from scraper.base import BaseScraper
@@ -238,44 +238,62 @@ class KleinanzeigenScraper(BaseScraper):
     async def fetch_listings(self) -> list[dict]:
         listings = []
 
-        async with httpx.AsyncClient(headers=_HEADERS, follow_redirects=True, timeout=20) as client:
-            for page in range(1, _MAX_PAGES + 1):
-                url = _page_url(page)
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent=_HEADERS["User-Agent"],
+                locale="de-DE",
+                extra_http_headers={
+                    "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+                },
+            )
+            page = await context.new_page()
 
-                # Polite delay before every request (including page 1)
-                await asyncio.sleep(random.uniform(2, 3))
+            try:
+                for pg in range(1, _MAX_PAGES + 1):
+                    url = _page_url(pg)
+                    await asyncio.sleep(random.uniform(2, 4))
 
-                try:
-                    response = await client.get(url)
-                    response.raise_for_status()
-                except httpx.HTTPError as exc:
-                    logger.error("Failed to fetch Kleinanzeigen page %d: %s", page, exc)
-                    break  # network error — stop pagination, return what we have
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                        # Wait for listings to render
+                        try:
+                            await page.wait_for_selector("article.aditem", timeout=10_000)
+                        except PWTimeout:
+                            pass  # no listings on this page — will check below
+                    except Exception as exc:
+                        logger.error("Failed to fetch Kleinanzeigen page %d: %s", pg, exc)
+                        break
 
-                soup = BeautifulSoup(response.text, "html.parser")
-                cards = soup.find_all("article", class_="aditem")
-                logger.info("Page %d — found %d cards", page, len(cards))
+                    html = await page.content()
+                    soup = BeautifulSoup(html, "html.parser")
+                    cards = soup.find_all("article", class_="aditem")
+                    logger.info("Page %d — found %d cards", pg, len(cards))
 
-                if not cards:
-                    logger.info("Page %d returned 0 cards — stopping pagination", page)
-                    break
+                    if not cards:
+                        logger.info("Page %d returned 0 cards — stopping pagination", pg)
+                        break
 
-                page_new = 0
-                for card in cards:
-                    # Skip sponsored/premium insertions
-                    if "aditem-premium" in card.get("class", []):
-                        continue
-                    # Skip listings older than 24 hours
-                    if not _is_within_24h(card):
-                        logger.debug("Skipping stale listing (>24h old)")
-                        continue
-                    listing = _parse_card(card)
-                    if listing:
-                        listings.append(listing)
-                        page_new += 1
+                    page_new = 0
+                    for card in cards:
+                        # Skip sponsored/premium insertions
+                        if "aditem-premium" in card.get("class", []):
+                            continue
+                        # Skip listings older than 24 hours
+                        if not _is_within_24h(card):
+                            logger.debug("Skipping stale listing (>24h old)")
+                            continue
+                        listing = _parse_card(card)
+                        if listing:
+                            listings.append(listing)
+                            page_new += 1
 
-                logger.info("Page %d — added %d new listings (total so far: %d)",
-                            page, page_new, len(listings))
+                    logger.info("Page %d — added %d new listings (total so far: %d)",
+                                pg, page_new, len(listings))
+
+            finally:
+                await context.close()
+                await browser.close()
 
         logger.info("Pagination complete — %d valid listings from Kleinanzeigen", len(listings))
         return listings
