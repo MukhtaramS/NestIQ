@@ -186,8 +186,9 @@ def run_loop() -> None:
     application.job_queue.run_repeating(
         _pipeline_job,
         interval=_POLL_INTERVAL,
-        first=0,          # run immediately on startup, then every 10 min
+        first=10,         # small delay on startup, then every 10 min
         name="pipeline",
+        job_kwargs={"max_instances": 1, "misfire_grace_time": 60},
     )
 
     logger.info(

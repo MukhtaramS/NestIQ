@@ -263,9 +263,9 @@ class KleinanzeigenScraper(BaseScraper):
                     await asyncio.sleep(random.uniform(2, 4))
 
                     try:
-                        await page.goto(url, wait_until="commit", timeout=60_000)
+                        await page.goto(url, wait_until="commit", timeout=45_000)
                         # Give the JS time to render listings
-                        await page.wait_for_timeout(5_000)
+                        await page.wait_for_timeout(3_000)
                     except Exception as exc:
                         logger.error("Failed to fetch Kleinanzeigen page %d: %s", pg, exc)
                         break
