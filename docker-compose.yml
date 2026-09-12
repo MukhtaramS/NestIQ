@@ -1,0 +1,13 @@
+services:
+  nestiq:
+    build: .
+    container_name: nestiq
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist the SQLite database and session file across restarts
+      - ./data:/app/data
+      - ./kleinanzeigen_session.json:/app/kleinanzeigen_session.json
+    environment:
+      - PYTHONUNBUFFERED=1

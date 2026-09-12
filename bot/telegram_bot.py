@@ -73,6 +73,8 @@ def _format_message(listing: dict[str, Any]) -> str:
     available_from = html.escape(listing.get("available_from", "?") or "?")
     description  = html.escape((listing.get("description", "") or "")[:150])
     url          = html.escape(listing.get("url", "") or "")
+    transit_ostbahnhof = html.escape(listing.get("transit_ostbahnhof", "N/A") or "N/A")
+    transit_ostkreuz   = html.escape(listing.get("transit_ostkreuz",   "N/A") or "N/A")
 
     green_flags: list[str] = listing.get("green_flags", []) or []
     red_flags:   list[str] = listing.get("red_flags",   []) or []
@@ -83,6 +85,7 @@ def _format_message(listing: dict[str, Any]) -> str:
         f"<b>{title}</b>",
         f"💶 {price} € cold  ·  📐 {size} m²  ·  🛏 {rooms} rooms",
         f"📍 {district}  ·  📅 Available from: {available_from}",
+        f"🚆 Ostbahnhof: {transit_ostbahnhof}  ·  Ostkreuz: {transit_ostkreuz}",
     ]
 
     landlord = _landlord_line(listing)
@@ -221,3 +224,4 @@ async def handle_callback(update: Update, context: CallbackContext) -> None:
         storage.mark_decision(url, "no")
         await query.edit_message_reply_markup(reply_markup=None)
         await query.message.reply_text("⏭ Skipped.")
+

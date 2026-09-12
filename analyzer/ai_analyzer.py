@@ -15,25 +15,32 @@ _CLIENT = AsyncGroq(api_key=config.GROQ_API_KEY)
 _MODEL = "llama-3.3-70b-versatile"
 
 _SYSTEM_PROMPT = (
-    "You are a German apartment hunting assistant. "
-    "Analyze listings for a young professional or student in Regensburg, Germany. "
+    "You are a Berlin apartment hunting assistant. "
+    "Analyze WG-Zimmer (room in shared flat) listings for a student doing a 6-month internship "
+    "at Tesla in Grünheide, living in east Berlin. "
+    "The internship runs from 1 October 2026 to end of March 2027 — the room must be available by 1 Oct 2026. "
     "Always respond with valid JSON only, no markdown, no explanation."
 )
 
 _USER_PROMPT_TEMPLATE = """\
-Analyze this apartment listing and return a JSON object with exactly these keys:
+Analyze this WG-Zimmer listing and return a JSON object with exactly these keys:
 - score: integer 1-10 (10 = perfect, 1 = avoid)
 - green_flags: list of short strings (positive aspects)
 - red_flags: list of short strings (warning signs)
 - summary: string, exactly 2 sentences in English
+- transit_ostbahnhof: string — estimated public transit time from this district to Berlin Ostbahnhof (e.g. "~12 min S-Bahn")
+- transit_ostkreuz: string — estimated public transit time from this district to Berlin Ostkreuz (e.g. "~8 min S-Bahn")
 
-Green flags to look for (use your own wording): private landlord (no agency), \
-price below Regensburg market rate (~12-15 €/m²), near university or city center, \
-furnished, pets allowed, balcony or garden.
+Green flags to look for: private landlord (no agency), price below Berlin market rate, \
+furnished room, short-term or 6-month rental ok, no Anmeldung required, near S-Bahn, \
+bills included (Nebenkosten), balcony or garden, quiet flatmates.
 
-Red flags to look for (use your own wording): agency fee (Provision or Makler), \
-very high deposit (more than 3 months cold rent), suspiciously low price (possible scam), \
-very short rental period, no description at all, urgent or pressure language.
+Red flags to look for: agency fee (Provision or Makler), very high deposit (more than 3 months), \
+suspiciously low price (possible scam), very short rental period (less than 3 months), \
+no description at all, urgent or pressure language, Anmeldung required.
+
+For transit times, use your knowledge of Berlin S-Bahn/U-Bahn. \
+Ostbahnhof and Ostkreuz are both in east Berlin — estimate realistically based on district.
 
 Listing details:
 Title: {title}
@@ -45,13 +52,17 @@ Available from: {available_from}
 Description: {description}
 
 Respond with valid JSON only. Example shape:
-{{"score": 7, "green_flags": ["private landlord", "balcony"], "red_flags": ["high deposit"], "summary": "Sentence one. Sentence two."}}"""
+{{"score": 7, "green_flags": ["private landlord", "furnished"], "red_flags": ["high deposit"], \
+"summary": "Sentence one. Sentence two.", \
+"transit_ostbahnhof": "~10 min S-Bahn", "transit_ostkreuz": "~7 min S-Bahn"}}"""
 
 _FALLBACK: dict[str, Any] = {
     "score": 5,
     "green_flags": [],
     "red_flags": [],
     "summary": "Analysis unavailable.",
+    "transit_ostbahnhof": "N/A",
+    "transit_ostkreuz": "N/A",
 }
 
 
@@ -82,6 +93,8 @@ def _parse_response(content: str) -> dict[str, Any]:
             "green_flags": [str(f) for f in data.get("green_flags", [])],
             "red_flags": [str(f) for f in data.get("red_flags", [])],
             "summary": str(data.get("summary", "Analysis unavailable.")),
+            "transit_ostbahnhof": str(data.get("transit_ostbahnhof", "N/A")),
+            "transit_ostkreuz": str(data.get("transit_ostkreuz", "N/A")),
         }
     except Exception as exc:
         logger.warning("Failed to parse Groq response: %s | raw: %.200s", exc, content)

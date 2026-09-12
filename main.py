@@ -3,6 +3,8 @@
 import argparse
 import asyncio
 import logging
+import re
+from datetime import date
 
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler
 
@@ -20,6 +22,59 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 600  # 10 minutes
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+_GERMAN_MONTHS_MAIN = {
+    "januar": 1, "februar": 2, "märz": 3, "april": 4,
+    "mai": 5, "juni": 6, "juli": 7, "august": 8,
+    "september": 9, "oktober": 10, "november": 11, "dezember": 12,
+    # common abbreviations
+    "jan": 1, "feb": 2, "mär": 3, "apr": 4,
+    "jun": 6, "jul": 7, "aug": 8, "sep": 9, "okt": 10, "nov": 11, "dez": 12,
+}
+
+
+def _parse_available_date(text: str) -> date | None:
+    """Best-effort parse of 'frei ab ...' strings into a date.
+
+    Handles: '01.10.2026', '1.10.2026', 'Oktober 2026', 'sofort', '01/10/2026'
+    Returns None when the string cannot be parsed (→ don't filter it out).
+    """
+    t = text.strip().lower()
+
+    # "sofort" / "ab sofort" → available now, always include
+    if "sofort" in t:
+        return date.today()
+
+    # DD.MM.YYYY or D.M.YYYY
+    m = re.search(r"(\d{1,2})[./](\d{1,2})[./](\d{4})", t)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            pass
+
+    # "Oktober 2026" / "Okt 2026" / "oktober 2026"
+    m = re.search(r"([a-zä]+)\s+(\d{4})", t)
+    if m:
+        month = _GERMAN_MONTHS_MAIN.get(m.group(1))
+        if month:
+            try:
+                return date(int(m.group(2)), month, 1)
+            except ValueError:
+                pass
+
+    # Bare year like "2027"
+    m = re.fullmatch(r"\d{4}", t)
+    if m:
+        try:
+            return date(int(t), 1, 1)
+        except ValueError:
+            pass
+
+    return None  # unparseable → don't filter out
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -59,6 +114,21 @@ async def run_pipeline() -> None:
         if rooms < config.MIN_ROOMS:
             logger.debug("Too few rooms (%s): %s", rooms, url)
             continue
+
+        # ── 2b. District filter ───────────────────────────────────────────────
+        if config.ALLOWED_DISTRICTS:
+            district = (listing.get("district") or "").lower()
+            if not any(d.lower() in district for d in config.ALLOWED_DISTRICTS):
+                logger.debug("Wrong district (%r): %s", listing.get("district"), url)
+                continue
+
+        # ── 2c. Availability filter — must be free by 1 Oct 2026 ─────────────
+        available_raw = (listing.get("available_from") or "").strip()
+        if available_raw and available_raw != "k.A.":
+            parsed_date = _parse_available_date(available_raw)
+            if parsed_date and parsed_date > date(2026, 10, 1):
+                logger.debug("Available too late (%s): %s", available_raw, url)
+                continue
 
         # ── 3. AI scoring ─────────────────────────────────────────────────────
         try:

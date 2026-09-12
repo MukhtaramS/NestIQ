@@ -371,7 +371,7 @@ async def trigger_application(listing: dict[str, Any]) -> None:
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
-            headless=False,
+            headless=True,
             args=["--disable-features=Translate", "--lang=de-DE"],
         )
 

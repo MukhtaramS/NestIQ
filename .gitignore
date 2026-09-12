@@ -1,23 +1,20 @@
-# Secrets — never commit
+# Environment — never commit real keys
 .env
+
+# Session & database
 kleinanzeigen_session.json
-
-# Database
+data/
 *.db
-*.sqlite3
 
-# Debug artefacts
-debug_*.png
+# Debug screenshots
+debug_login*.png
 
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
+*.egg-info/
 .venv/
 venv/
-*.egg-info/
-dist/
-build/
 
-# macOS
-.DS_Store
+# Logs
+*.log
