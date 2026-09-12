@@ -239,7 +239,15 @@ class KleinanzeigenScraper(BaseScraper):
         listings = []
 
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=True)
+            browser = await pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--single-process",
+                ],
+            )
             context = await browser.new_context(
                 user_agent=_HEADERS["User-Agent"],
                 locale="de-DE",
@@ -255,12 +263,9 @@ class KleinanzeigenScraper(BaseScraper):
                     await asyncio.sleep(random.uniform(2, 4))
 
                     try:
-                        await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                        # Wait for listings to render
-                        try:
-                            await page.wait_for_selector("article.aditem", timeout=10_000)
-                        except PWTimeout:
-                            pass  # no listings on this page — will check below
+                        await page.goto(url, wait_until="commit", timeout=60_000)
+                        # Give the JS time to render listings
+                        await page.wait_for_timeout(5_000)
                     except Exception as exc:
                         logger.error("Failed to fetch Kleinanzeigen page %d: %s", pg, exc)
                         break
